@@ -11,6 +11,10 @@
   --zone-e: #e34a33;
   --zone-f: #8f0f17;
   --zone-x: #64748b;
+  --state-impossible: #3f1720;
+  --state-not-possible: #8f0f17;
+  --state-out-model: #64748b;
+  --state-unknown: #4b5563;
 }
 
 * {
@@ -24,7 +28,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -82,11 +87,34 @@ p {
 }
 
 .map-note,
-.method-note {
+.method-drawer {
   margin: -4px 0 0;
   color: #93a4b1;
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.toolbar label {
+  display: grid;
+  gap: 6px;
+  color: #c9d7de;
+  font-size: 0.82rem;
+}
+
+.toolbar select {
+  min-height: 39px;
+  padding: 8px 10px;
+  color: #f7f1e6;
+  background: #1a2028;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 7px;
 }
 
 .controls {
@@ -113,6 +141,7 @@ p {
 }
 
 .controls input:focus-visible,
+.toolbar select:focus-visible,
 button:focus-visible,
 .leaflet-container:focus-visible {
   outline: 2px solid #f1d36b;
@@ -137,6 +166,13 @@ button {
 }
 
 button:nth-child(2) {
+  color: #d8e7f7;
+  background: #243245;
+  border: 1px solid rgb(147 197 253 / 36%);
+}
+
+#export-png {
+  min-width: 112px;
   color: #d8e7f7;
   background: #243245;
   border: 1px solid rgb(147 197 253 / 36%);
@@ -195,6 +231,22 @@ button:nth-child(2) {
   box-shadow: inset 3px 0 0 var(--zone-f);
 }
 
+.readout[data-zone="IMPOSSIBLE"] {
+  box-shadow: inset 3px 0 0 var(--state-impossible);
+}
+
+.readout[data-zone="NOT_POSSIBLE"] {
+  box-shadow: inset 3px 0 0 var(--state-not-possible);
+}
+
+.readout[data-zone="OUT_OF_MODEL"] {
+  box-shadow: inset 3px 0 0 var(--state-out-model);
+}
+
+.readout[data-zone="UNKNOWN"] {
+  box-shadow: inset 3px 0 0 var(--state-unknown);
+}
+
 dl {
   display: grid;
   gap: 10px;
@@ -224,16 +276,25 @@ dd {
 
 .legend {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 9px;
   color: #d8e0e5;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .legend div {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.legend div[hidden] {
+  display: none;
+}
+
+.legend b {
+  color: #f7f1e6;
 }
 
 .legend span {
@@ -267,6 +328,41 @@ dd {
 
 .legend [data-zone="F"] span {
   background: var(--zone-f);
+}
+
+.legend [data-state="IMPOSSIBLE"] span {
+  background: var(--state-impossible);
+}
+
+.legend [data-state="NOT_POSSIBLE"] span {
+  background: var(--state-not-possible);
+}
+
+.legend [data-state="OUT_OF_MODEL"] span {
+  background: var(--state-out-model);
+}
+
+.legend [data-state="UNKNOWN"] span {
+  background: var(--state-unknown);
+}
+
+.method-drawer {
+  padding-top: 2px;
+}
+
+.method-drawer summary {
+  color: #d8e0e5;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.method-drawer p {
+  margin-top: 9px;
+  color: #93a4b1;
+}
+
+.method-drawer a {
+  color: #9bd7ff;
 }
 
 .leaflet-container {

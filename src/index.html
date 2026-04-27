@@ -18,9 +18,22 @@
 
         <p class="map-note">Map overlay uses sea-level calculations. The point result uses the entered elevation.</p>
 
+        <div class="toolbar" aria-label="Map tools">
+          <label>
+            Criterion
+            <select id="criterion" name="criterion">
+              <option value="yallop">Yallop</option>
+              <option value="odeh">Odeh</option>
+              <option value="saao" disabled>SAAO later</option>
+            </select>
+          </label>
+          <button id="export-png" type="button">Export PNG</button>
+        </div>
+
         <section class="readout" id="readout" aria-live="polite">
           <div id="message" class="message" hidden></div>
           <dl>
+            <div class="primary-result"><dt>Selected</dt><dd id="selected-criterion">-</dd></div>
             <div class="primary-result"><dt>Yallop</dt><dd id="yallop">-</dd></div>
             <div class="primary-result"><dt>Odeh</dt><dd id="odeh">-</dd></div>
             <div><dt>Best Time</dt><dd id="best-time">-</dd></div>
@@ -52,19 +65,32 @@
           </div>
         </form>
 
-        <section class="legend" aria-label="Yallop zones">
-          <div data-zone="A"><span></span>A unaided</div>
-          <div data-zone="B"><span></span>B ideal</div>
-          <div data-zone="C"><span></span>C aid first</div>
-          <div data-zone="D"><span></span>D optical</div>
-          <div data-zone="E"><span></span>E telescope limit</div>
-          <div data-zone="F"><span></span>F invisible</div>
-          <div data-zone="X"><span></span>Out of range</div>
+        <section class="legend" aria-label="Visibility legend">
+          <div data-zone="A"><span></span><b>A</b> Easily visible unaided</div>
+          <div data-zone="B"><span></span><b>B</b> Perfect conditions</div>
+          <div data-zone="C"><span></span><b>C</b> May need optical aid first</div>
+          <div data-zone="D"><span></span><b>D</b> Optical aid only</div>
+          <div data-zone="E"><span></span><b>E</b> Telescope-limit / very unlikely</div>
+          <div data-zone="F"><span></span><b>F</b> Not visible</div>
+          <div data-state="IMPOSSIBLE"><span></span>Impossible</div>
+          <div data-state="NOT_POSSIBLE"><span></span>Not possible</div>
+          <div data-state="OUT_OF_MODEL"><span></span>Out of model range</div>
+          <div data-state="UNKNOWN"><span></span>Unknown</div>
         </section>
 
-        <p class="method-note">
-          Uses Yallop q and Odeh V first-crescent criteria. Visibility still depends on haze, horizon, eyesight, and observing skill.
-        </p>
+        <details class="method-drawer">
+          <summary>Method and observing caveats</summary>
+          <p>
+            Uses Yallop q and Odeh V first-crescent criteria. Visibility still depends on haze, horizon transparency,
+            eyesight, observer experience, and knowing exactly where to look.
+          </p>
+          <p>
+            References:
+            <a href="https://astronomycenter.net/pdf/yallop_1997.pdf" target="_blank" rel="noreferrer">Yallop TN 69</a>,
+            <a href="https://astronomycenter.net/pdf/2006_cri.pdf" target="_blank" rel="noreferrer">Odeh 2004</a>,
+            <a href="https://astronomycenter.net/accut.html?l=en" target="_blank" rel="noreferrer">IAC Accurate Times</a>.
+          </p>
+        </details>
       </aside>
 
       <main id="map" aria-label="Interactive lunar visibility map. Click the map or enter coordinates to sample a point."></main>

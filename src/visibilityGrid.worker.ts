@@ -1,10 +1,14 @@
-import { calculateVisibility } from "../shared/visibilityMath";
+import { calculateVisibility, VisibilityError, visibilityStateForErrorCode } from "../shared/visibilityMath";
+import type { OdehZoneCode, VisibilityStateCode, YallopZoneCode } from "../shared/types";
+
+type Criterion = "yallop" | "odeh";
 
 interface ComputeMessage {
   type: "compute";
   id: number;
   date: string;
   zoom: number;
+  criterion: Criterion;
   bounds: {
     south: number;
     north: number;
@@ -19,9 +23,14 @@ interface GridCell {
   west: number;
   east: number;
   color: string;
-  zone: string;
-  q: number;
-  odehZone: string;
+  label: string;
+  detail: string;
+  state: VisibilityStateCode;
+  criterion: Criterion;
+  zone?: YallopZoneCode | OdehZoneCode;
+  value?: number;
+  yallopZone?: YallopZoneCode;
+  odehZone?: OdehZoneCode;
 }
 
 self.addEventListener("message", (event: MessageEvent<ComputeMessage>) => {
@@ -54,22 +63,39 @@ self.addEventListener("message", (event: MessageEvent<ComputeMessage>) => {
           elevationMeters: 0
         });
 
-        if (!result.ephemeris.diagnostics.modelApplicable) {
-          continue;
-        }
+        const state = result.ephemeris.diagnostics.state;
+        const criterion = message.criterion === "odeh" ? result.criteria.odeh : result.criteria.yallop;
 
         cells.push({
           south: lat,
           north: lat + step,
           west: lng,
           east: lng + step,
-          color: result.criteria.yallop.color,
-          zone: result.criteria.yallop.zone,
-          q: result.criteria.yallop.q,
+          color: result.ephemeris.diagnostics.modelApplicable ? criterion.color : state.color,
+          label: result.ephemeris.diagnostics.modelApplicable ? criterion.label : state.label,
+          detail: result.ephemeris.diagnostics.modelApplicable ? `${message.criterion.toUpperCase()} zone ${criterion.zone}` : state.detail,
+          state: state.code,
+          criterion: message.criterion,
+          zone: result.ephemeris.diagnostics.modelApplicable ? criterion.zone : undefined,
+          value: "q" in criterion ? criterion.q : criterion.v,
+          yallopZone: result.criteria.yallop.zone,
           odehZone: result.criteria.odeh.zone
         });
-      } catch {
-        continue;
+      } catch (error) {
+        if (error instanceof VisibilityError) {
+          const state = visibilityStateForErrorCode(error.code);
+          cells.push({
+            south: lat,
+            north: lat + step,
+            west: lng,
+            east: lng + step,
+            color: state.color,
+            label: state.label,
+            detail: state.detail,
+            state: state.code,
+            criterion: message.criterion
+          });
+        }
       }
     }
   }

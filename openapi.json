@@ -55,6 +55,19 @@
           "distanceAu": { "type": "number" }
         }
       },
+      "VisibilityState": {
+        "type": "object",
+        "required": ["code", "label", "color", "detail"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": ["VISIBLE_MODEL", "IMPOSSIBLE", "NOT_POSSIBLE", "OUT_OF_MODEL", "UNKNOWN"]
+          },
+          "label": { "type": "string" },
+          "color": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      },
       "VisibilityResponse": {
         "type": "object",
         "required": ["input", "times", "ephemeris", "criteria"],
@@ -81,7 +94,7 @@
           },
           "ephemeris": {
             "type": "object",
-            "required": ["sun", "moon", "arcvDeg", "dazDeg", "arclDeg", "crescentWidthArcMin"],
+            "required": ["sun", "moon", "arcvDeg", "dazDeg", "arclDeg", "crescentWidthArcMin", "moonPhaseDeg", "diagnostics"],
             "properties": {
               "sun": { "$ref": "#/components/schemas/HorizontalBody" },
               "moon": { "$ref": "#/components/schemas/HorizontalBody" },
@@ -93,6 +106,7 @@
               "diagnostics": {
                 "type": "object",
                 "required": [
+                  "state",
                   "moonApparentAltitudeDeg",
                   "sunApparentAltitudeDeg",
                   "moonAirmass",
@@ -102,6 +116,7 @@
                   "modelWarning"
                 ],
                 "properties": {
+                  "state": { "$ref": "#/components/schemas/VisibilityState" },
                   "moonApparentAltitudeDeg": { "type": "number" },
                   "sunApparentAltitudeDeg": { "type": "number" },
                   "moonAirmass": { "type": ["number", "null"] },

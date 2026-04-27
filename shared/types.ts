@@ -1,5 +1,6 @@
 export type YallopZoneCode = "A" | "B" | "C" | "D" | "E" | "F";
 export type OdehZoneCode = "A" | "B" | "C" | "D";
+export type VisibilityStateCode = "VISIBLE_MODEL" | "IMPOSSIBLE" | "NOT_POSSIBLE" | "OUT_OF_MODEL" | "UNKNOWN";
 
 export interface VisibilityInput {
   date: string;
@@ -37,6 +38,13 @@ export interface OdehCriterion {
   color: string;
 }
 
+export interface VisibilityState {
+  code: VisibilityStateCode;
+  label: string;
+  color: string;
+  detail: string;
+}
+
 export interface VisibilityResponse {
   input: VisibilityInput;
   times: VisibilityTimes;
@@ -49,6 +57,7 @@ export interface VisibilityResponse {
     crescentWidthArcMin: number;
     moonPhaseDeg: number;
     diagnostics: {
+      state: VisibilityState;
       moonApparentAltitudeDeg: number;
       sunApparentAltitudeDeg: number;
       moonAirmass: number | null;

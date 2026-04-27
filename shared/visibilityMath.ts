@@ -9,14 +9,46 @@ import {
   SearchMoonPhase,
   SearchRiseSet
 } from "astronomy-engine";
-import type { HorizontalBody, OdehCriterion, VisibilityResponse, YallopCriterion } from "./types";
+import type { HorizontalBody, OdehCriterion, VisibilityResponse, VisibilityState, VisibilityStateCode, YallopCriterion } from "./types";
 
 const MOON_RADIUS_KM = 1737.4;
 const MS_PER_DAY = 86_400_000;
+const VISIBILITY_STATES: Record<VisibilityStateCode, VisibilityState> = {
+  VISIBLE_MODEL: {
+    code: "VISIBLE_MODEL",
+    label: "Criterion applies",
+    color: "#64748b",
+    detail: "The crescent is inside the Yallop/Odeh first-visibility model domain."
+  },
+  IMPOSSIBLE: {
+    code: "IMPOSSIBLE",
+    label: "Impossible",
+    color: "#3f1720",
+    detail: "The Moon is below the horizon at sunset, or sets before/at sunset."
+  },
+  NOT_POSSIBLE: {
+    code: "NOT_POSSIBLE",
+    label: "Not possible",
+    color: "#8f0f17",
+    detail: "The geometry is below a physical first-crescent visibility limit."
+  },
+  OUT_OF_MODEL: {
+    code: "OUT_OF_MODEL",
+    label: "Out of model range",
+    color: "#64748b",
+    detail: "The date/location is outside the early waxing crescent range these criteria are intended for."
+  },
+  UNKNOWN: {
+    code: "UNKNOWN",
+    label: "Unknown",
+    color: "#4b5563",
+    detail: "A high-latitude or horizon edge case prevented a reliable sunset/moonset calculation."
+  }
+};
 
 export function classifyYallop(q: number): YallopCriterion {
   if (q > 0.216) {
-    return { q, zone: "A", label: "Easily visible to unaided eye", color: "#1b9e77" };
+    return { q, zone: "A", label: "Easily visible unaided", color: "#1b9e77" };
   }
   if (q > -0.014) {
     return { q, zone: "B", label: "Visible under perfect conditions", color: "#66bd63" };
@@ -35,15 +67,27 @@ export function classifyYallop(q: number): YallopCriterion {
 
 export function classifyOdeh(v: number): OdehCriterion {
   if (v >= 5.65) {
-    return { v, zone: "A", label: "Visible by naked eye", color: "#1b9e77" };
+    return { v, zone: "A", label: "Visible unaided", color: "#1b9e77" };
   }
   if (v >= 2) {
-    return { v, zone: "B", label: "Optical aid, possibly naked eye", color: "#66bd63" };
+    return { v, zone: "B", label: "May be visible unaided, optical aid helps", color: "#66bd63" };
   }
   if (v >= -0.96) {
     return { v, zone: "C", label: "Visible by optical aid only", color: "#fdae61" };
   }
   return { v, zone: "D", label: "Not visible even by optical aid", color: "#e34a33" };
+}
+
+export function visibilityStateForErrorCode(code: string): VisibilityState {
+  if (code === "MOON_BELOW_HORIZON_AT_SUNSET" || code === "MOONSET_BEFORE_SUNSET") {
+    return VISIBILITY_STATES.IMPOSSIBLE;
+  }
+
+  if (code === "SUNSET_NOT_FOUND" || code === "MOONSET_NOT_FOUND") {
+    return VISIBILITY_STATES.UNKNOWN;
+  }
+
+  return VISIBILITY_STATES.OUT_OF_MODEL;
 }
 
 export function yallopQ(arcvDeg: number, crescentWidthArcMin: number): number {
@@ -114,6 +158,7 @@ export function calculateVisibilityAtBestTime(
   const lagMinutes = (moonset.getTime() - sunset.getTime()) / 60_000;
   const phaseDeg = MoonPhase(bestTime);
   const modelWarning = modelApplicabilityWarning(phaseDeg, arclDeg, moon.altitudeDeg, sun.altitudeDeg);
+  const state = modelWarning ? visibilityStateForModelWarning(modelWarning) : VISIBILITY_STATES.VISIBLE_MODEL;
 
   return {
     input: { date, lat, lng, elevationMeters },
@@ -132,6 +177,7 @@ export function calculateVisibilityAtBestTime(
       crescentWidthArcMin,
       moonPhaseDeg: phaseDeg,
       diagnostics: {
+        state,
         moonApparentAltitudeDeg: apparentMoon.altitudeDeg,
         sunApparentAltitudeDeg: apparentSun.altitudeDeg,
         moonAirmass: opticalAirmass(apparentMoon.altitudeDeg),
@@ -238,6 +284,14 @@ function modelApplicabilityWarning(phaseDeg: number, arclDeg: number, moonAltitu
     return "Moon is not above the Sun at the computed best time.";
   }
   return null;
+}
+
+function visibilityStateForModelWarning(modelWarning: string): VisibilityState {
+  if (modelWarning.includes("Danjon") || modelWarning.includes("not above the Sun")) {
+    return VISIBILITY_STATES.NOT_POSSIBLE;
+  }
+
+  return VISIBILITY_STATES.OUT_OF_MODEL;
 }
 
 function toIsoDate(date: Date): string {

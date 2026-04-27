@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { calculateVisibility, classifyOdeh, classifyYallop, nextCrescentDate, odehV, yallopQ } from "../shared/visibilityMath";
+import {
+  calculateVisibility,
+  classifyOdeh,
+  classifyYallop,
+  nextCrescentDate,
+  odehV,
+  visibilityStateForErrorCode,
+  yallopQ
+} from "../shared/visibilityMath";
 
 describe("visibility criteria", () => {
   it("classifies Yallop benchmark thresholds", () => {
@@ -61,7 +69,13 @@ describe("point ephemeris", () => {
     });
 
     expect(result.ephemeris.diagnostics.modelApplicable).toBe(false);
+    expect(result.ephemeris.diagnostics.state.code).toBe("OUT_OF_MODEL");
     expect(result.ephemeris.diagnostics.modelWarning).toContain("phase window");
+  });
+
+  it("maps horizon failures to first-class map states", () => {
+    expect(visibilityStateForErrorCode("MOONSET_BEFORE_SUNSET").code).toBe("IMPOSSIBLE");
+    expect(visibilityStateForErrorCode("SUNSET_NOT_FOUND").code).toBe("UNKNOWN");
   });
 
   it("defaults to the evening after the next astronomical new moon", () => {

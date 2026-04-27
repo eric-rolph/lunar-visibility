@@ -7,6 +7,23 @@ import markerIcon2xUrl from "leaflet/dist/images/marker-icon-2x.png";
 import markerIconUrl from "leaflet/dist/images/marker-icon.png";
 import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
 
+type Criterion = "yallop" | "odeh";
+type GridCell = {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+  color: string;
+  label: string;
+  detail: string;
+  state: string;
+  criterion: Criterion;
+  zone?: string;
+  value?: number;
+  yallopZone?: string;
+  odehZone?: string;
+};
+
 const CENTENNIAL = { lat: 39.5807, lng: -104.8772, elevationMeters: 1777 };
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
@@ -36,6 +53,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 const yallop = document.querySelector<HTMLDListElement>("#yallop")!;
 const odeh = document.querySelector<HTMLDListElement>("#odeh")!;
+const selectedCriterion = document.querySelector<HTMLDListElement>("#selected-criterion")!;
 const bestTime = document.querySelector<HTMLDListElement>("#best-time")!;
 const angles = document.querySelector<HTMLDListElement>("#angles")!;
 const width = document.querySelector<HTMLDListElement>("#width")!;
@@ -46,8 +64,10 @@ const dateInput = document.querySelector<HTMLInputElement>("#date")!;
 const latInput = document.querySelector<HTMLInputElement>("#lat")!;
 const lngInput = document.querySelector<HTMLInputElement>("#lng")!;
 const elevationInput = document.querySelector<HTMLInputElement>("#elevation")!;
+const criterionInput = document.querySelector<HTMLSelectElement>("#criterion")!;
 const controls = document.querySelector<HTMLFormElement>("#controls")!;
 const centerButton = document.querySelector<HTMLButtonElement>("#center")!;
+const exportButton = document.querySelector<HTMLButtonElement>("#export-png")!;
 
 dateInput.value = nextCrescentDate();
 
@@ -56,12 +76,22 @@ let renderLayer = L.layerGroup().addTo(map);
 let marker = L.marker([CENTENNIAL.lat, CENTENNIAL.lng], { icon: markerIcon }).addTo(map);
 let gridWorker: Worker | null = null;
 let gridTimer: number | undefined;
+let lastCells: GridCell[] = [];
+let currentPoint: VisibilityResponse | null = null;
 
 map.on("moveend zoomend", scheduleGrid);
 dateInput.addEventListener("change", () => {
   scheduleGrid();
   void samplePoint({ syncMarker: false });
 });
+criterionInput.addEventListener("change", () => {
+  updateLegend();
+  scheduleGrid();
+  if (currentPoint) {
+    updateReadout(currentPoint);
+  }
+});
+exportButton.addEventListener("click", exportCurrentMap);
 
 controls.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -85,6 +115,7 @@ map.on("click", (event) => {
 });
 
 scheduleGrid();
+updateLegend();
 void samplePoint();
 
 function scheduleGrid(): void {
@@ -114,6 +145,7 @@ function computeGrid(): void {
     id: requestId,
     date: dateInput.value,
     zoom: map.getZoom(),
+    criterion: selectedCriterionKey(),
     bounds: {
       south: bounds.getSouth(),
       north: bounds.getNorth(),
@@ -123,9 +155,8 @@ function computeGrid(): void {
   });
 }
 
-function renderGrid(
-  cells: Array<{ south: number; west: number; north: number; east: number; color: string; zone: string; q: number; odehZone: string }>
-): void {
+function renderGrid(cells: GridCell[]): void {
+  lastCells = cells;
   renderLayer.clearLayers();
   const canvasRenderer = L.canvas({ padding: 0.2 });
   const fragment = L.layerGroup();
@@ -141,11 +172,11 @@ function renderGrid(
         stroke: false,
         fill: true,
         fillColor: cell.color,
-        fillOpacity: 0.32,
+        fillOpacity: cell.state === "VISIBLE_MODEL" ? 0.32 : 0.28,
         interactive: true
       }
     )
-      .bindTooltip(`Yallop ${cell.zone} | q ${cell.q.toFixed(3)} | Odeh ${cell.odehZone}`, {
+      .bindTooltip(formatCellTooltip(cell), {
         sticky: true,
         opacity: 0.95
       })
@@ -189,12 +220,15 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
       throw new Error(body.message ?? body.error ?? "Point API failed");
     }
     hideMessage();
-    updateReadout(body as VisibilityResponse);
+    currentPoint = body as VisibilityResponse;
+    updateReadout(currentPoint);
     status.value = "Ready";
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to sample point";
     readout.dataset.zone = "X";
     showMessage(message, "error");
+    currentPoint = null;
+    selectedCriterion.textContent = "Unavailable";
     yallop.textContent = "Unavailable";
     odeh.textContent = "-";
     bestTime.textContent = "-";
@@ -205,24 +239,153 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
 }
 
 function updateReadout(result: VisibilityResponse): void {
+  const selected = selectedCriterionKey();
   if (!result.ephemeris.diagnostics.modelApplicable) {
-    readout.dataset.zone = "X";
+    const state = result.ephemeris.diagnostics.state;
+    readout.dataset.zone = state.code;
     showMessage(result.ephemeris.diagnostics.modelWarning ?? "Model not applicable for this date/location.", "warning");
-    yallop.textContent = "Outside crescent window";
+    selectedCriterion.textContent = state.label;
+    selectedCriterion.title = state.detail;
+    yallop.textContent = "Not scored";
     yallop.title = result.ephemeris.diagnostics.modelWarning ?? "";
-    odeh.textContent = result.ephemeris.diagnostics.modelWarning ?? "Model not applicable";
+    odeh.textContent = "Not scored";
     odeh.title = odeh.textContent;
   } else {
-    readout.dataset.zone = result.criteria.yallop.zone;
+    const selectedResult = selected === "odeh" ? result.criteria.odeh : result.criteria.yallop;
+    readout.dataset.zone = selectedResult.zone;
     hideMessage();
-    yallop.textContent = `${result.criteria.yallop.zone} q ${result.criteria.yallop.q.toFixed(3)} - ${result.criteria.yallop.label}`;
+    selectedCriterion.textContent = formatCriterionResult(selected, result);
+    selectedCriterion.title = selectedResult.label;
+    yallop.textContent = `${result.criteria.yallop.label} (zone ${result.criteria.yallop.zone}, q ${result.criteria.yallop.q.toFixed(3)})`;
     yallop.title = result.criteria.yallop.label;
-    odeh.textContent = `${result.criteria.odeh.zone} V ${result.criteria.odeh.v.toFixed(2)} - ${result.criteria.odeh.label}`;
+    odeh.textContent = `${result.criteria.odeh.label} (zone ${result.criteria.odeh.zone}, V ${result.criteria.odeh.v.toFixed(2)})`;
     odeh.title = result.criteria.odeh.label;
   }
   bestTime.textContent = formatBestTime(result.times.bestTimeUtc);
   angles.textContent = `${result.ephemeris.arcvDeg.toFixed(2)} / ${result.ephemeris.dazDeg.toFixed(2)} deg`;
   width.textContent = `${result.ephemeris.crescentWidthArcMin.toFixed(3)} arcmin`;
+}
+
+function selectedCriterionKey(): Criterion {
+  return criterionInput.value === "odeh" ? "odeh" : "yallop";
+}
+
+function formatCriterionResult(criterion: Criterion, result: VisibilityResponse): string {
+  if (criterion === "odeh") {
+    return `Odeh ${result.criteria.odeh.zone}: ${result.criteria.odeh.label} (V ${result.criteria.odeh.v.toFixed(2)})`;
+  }
+
+  return `Yallop ${result.criteria.yallop.zone}: ${result.criteria.yallop.label} (q ${result.criteria.yallop.q.toFixed(3)})`;
+}
+
+function formatCellTooltip(cell: GridCell): string {
+  if (cell.state !== "VISIBLE_MODEL") {
+    return `${cell.label}: ${cell.detail}`;
+  }
+
+  const valueLabel = cell.criterion === "odeh" ? "V" : "q";
+  const value = typeof cell.value === "number" ? ` | ${valueLabel} ${cell.value.toFixed(cell.criterion === "odeh" ? 2 : 3)}` : "";
+  return `${cell.label} | ${cell.criterion.toUpperCase()} ${cell.zone}${value} | Yallop ${cell.yallopZone ?? "-"} | Odeh ${cell.odehZone ?? "-"}`;
+}
+
+function updateLegend(): void {
+  const yallopLabels = {
+    A: "Easily visible unaided",
+    B: "Perfect conditions",
+    C: "May need optical aid first",
+    D: "Optical aid only",
+    E: "Telescope-limit / very unlikely",
+    F: "Not visible"
+  };
+  const odehLabels = {
+    A: "Visible unaided",
+    B: "May be visible unaided, aid helps",
+    C: "Optical aid only",
+    D: "Not visible with optical aid"
+  };
+  const labels = selectedCriterionKey() === "odeh" ? odehLabels : yallopLabels;
+
+  for (const zone of ["A", "B", "C", "D", "E", "F"] as const) {
+    const item = document.querySelector<HTMLElement>(`.legend [data-zone="${zone}"]`);
+    if (!item) continue;
+    const label = labels[zone as keyof typeof labels];
+    item.hidden = !label;
+    item.innerHTML = `<span></span><b>${zone}</b> ${label ?? ""}`;
+  }
+}
+
+function exportCurrentMap(): void {
+  const size = map.getSize();
+  const canvas = document.createElement("canvas");
+  canvas.width = size.x;
+  canvas.height = size.y;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    showMessage("Unable to export this browser view.", "error");
+    return;
+  }
+
+  context.fillStyle = "#111821";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  drawGraticule(context, canvas.width, canvas.height);
+
+  for (const cell of lastCells) {
+    const nw = map.latLngToContainerPoint([cell.north, cell.west]);
+    const se = map.latLngToContainerPoint([cell.south, cell.east]);
+    context.fillStyle = withAlpha(cell.color, cell.state === "VISIBLE_MODEL" ? 0.7 : 0.58);
+    context.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
+  }
+
+  context.fillStyle = "rgba(11, 13, 16, 0.82)";
+  context.fillRect(16, 16, Math.min(430, canvas.width - 32), 74);
+  context.fillStyle = "#f7f1e6";
+  context.font = "700 18px Inter, system-ui, sans-serif";
+  context.fillText("Lunar Crescent Visibility", 30, 43);
+  context.font = "13px Inter, system-ui, sans-serif";
+  context.fillStyle = "#c8d3dc";
+  context.fillText(`${dateInput.value} | ${selectedCriterionKey().toUpperCase()} criterion | generated from current viewport`, 30, 66);
+
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      showMessage("Unable to export this browser view.", "error");
+      return;
+    }
+    const link = document.createElement("a");
+    const objectUrl = URL.createObjectURL(blob);
+    link.download = `lunar-visibility-${dateInput.value}-${selectedCriterionKey()}.png`;
+    link.href = objectUrl;
+    link.style.display = "none";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    status.value = "PNG exported";
+  }, "image/png");
+}
+
+function drawGraticule(context: CanvasRenderingContext2D, width: number, height: number): void {
+  context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  context.lineWidth = 1;
+  for (let x = 0; x <= width; x += Math.max(80, width / 8)) {
+    context.beginPath();
+    context.moveTo(x, 0);
+    context.lineTo(x, height);
+    context.stroke();
+  }
+  for (let y = 0; y <= height; y += Math.max(70, height / 6)) {
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+    context.stroke();
+  }
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const value = hex.replace("#", "");
+  const red = Number.parseInt(value.slice(0, 2), 16);
+  const green = Number.parseInt(value.slice(2, 4), 16);
+  const blue = Number.parseInt(value.slice(4, 6), 16);
+  return `rgb(${red} ${green} ${blue} / ${alpha})`;
 }
 
 function parseRequiredNumber(input: HTMLInputElement): number | null {
