@@ -12,10 +12,14 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.PROD ? "https://lunar-visibility-api.ericrolph.workers.dev" : "");
 
-L.Icon.Default.mergeOptions({
+const markerIcon = L.icon({
   iconRetinaUrl: markerIcon2xUrl,
   iconUrl: markerIconUrl,
-  shadowUrl: markerShadowUrl
+  shadowUrl: markerShadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
 
 const map = L.map("map", {
@@ -35,6 +39,8 @@ const odeh = document.querySelector<HTMLDListElement>("#odeh")!;
 const bestTime = document.querySelector<HTMLDListElement>("#best-time")!;
 const angles = document.querySelector<HTMLDListElement>("#angles")!;
 const width = document.querySelector<HTMLDListElement>("#width")!;
+const readout = document.querySelector<HTMLElement>("#readout")!;
+const message = document.querySelector<HTMLDivElement>("#message")!;
 const status = document.querySelector<HTMLOutputElement>("#status")!;
 const dateInput = document.querySelector<HTMLInputElement>("#date")!;
 const latInput = document.querySelector<HTMLInputElement>("#lat")!;
@@ -47,7 +53,7 @@ dateInput.value = nextCrescentDate();
 
 let requestId = 0;
 let renderLayer = L.layerGroup().addTo(map);
-let marker = L.marker([CENTENNIAL.lat, CENTENNIAL.lng]).addTo(map);
+let marker = L.marker([CENTENNIAL.lat, CENTENNIAL.lng], { icon: markerIcon }).addTo(map);
 let gridWorker: Worker | null = null;
 let gridTimer: number | undefined;
 
@@ -89,7 +95,7 @@ function scheduleGrid(): void {
 function computeGrid(): void {
   requestId += 1;
   const bounds = map.getBounds();
-  status.value = "Computing";
+  status.value = "Updating map";
 
   gridWorker?.terminate();
   gridWorker = new Worker(new URL("./visibilityGrid.worker.ts", import.meta.url), { type: "module" });
@@ -99,7 +105,8 @@ function computeGrid(): void {
       return;
     }
     renderGrid(message.cells);
-    status.value = `${message.cells.length} cells`;
+    status.value = "Map updated";
+    status.title = `${message.cells.length} visibility cells rendered`;
   });
 
   gridWorker.postMessage({
@@ -116,7 +123,9 @@ function computeGrid(): void {
   });
 }
 
-function renderGrid(cells: Array<{ south: number; west: number; north: number; east: number; color: string; zone: string }>): void {
+function renderGrid(
+  cells: Array<{ south: number; west: number; north: number; east: number; color: string; zone: string; q: number; odehZone: string }>
+): void {
   renderLayer.clearLayers();
   const canvasRenderer = L.canvas({ padding: 0.2 });
   const fragment = L.layerGroup();
@@ -132,10 +141,15 @@ function renderGrid(cells: Array<{ south: number; west: number; north: number; e
         stroke: false,
         fill: true,
         fillColor: cell.color,
-        fillOpacity: 0.46,
-        interactive: false
+        fillOpacity: 0.32,
+        interactive: true
       }
-    ).addTo(fragment);
+    )
+      .bindTooltip(`Yallop ${cell.zone} | q ${cell.q.toFixed(3)} | Odeh ${cell.odehZone}`, {
+        sticky: true,
+        opacity: 0.95
+      })
+      .addTo(fragment);
   }
 
   renderLayer.removeFrom(map);
@@ -147,9 +161,10 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
     return;
   }
 
-  const lat = Number(latInput.value);
-  const lng = Number(lngInput.value);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+  const lat = parseRequiredNumber(latInput);
+  const lng = parseRequiredNumber(lngInput);
+  const elevation = parseRequiredNumber(elevationInput);
+  if (lat === null || lng === null || elevation === null) {
     status.value = "Invalid point";
     return;
   }
@@ -160,12 +175,12 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
     map.panTo(latLng, { animate: true });
   }
 
-  status.value = "Sampling";
+  status.value = "Checking";
   const url = new URL("/api/visibility", API_BASE_URL || window.location.origin);
   url.searchParams.set("date", dateInput.value);
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lng", String(lng));
-  url.searchParams.set("elevationMeters", elevationInput.value);
+  url.searchParams.set("elevationMeters", String(elevation));
 
   try {
     const response = await fetch(url);
@@ -173,11 +188,14 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
     if (!response.ok) {
       throw new Error(body.message ?? body.error ?? "Point API failed");
     }
+    hideMessage();
     updateReadout(body as VisibilityResponse);
     status.value = "Ready";
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to sample point";
-    yallop.textContent = message;
+    readout.dataset.zone = "X";
+    showMessage(message, "error");
+    yallop.textContent = "Unavailable";
     odeh.textContent = "-";
     bestTime.textContent = "-";
     angles.textContent = "-";
@@ -188,17 +206,58 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
 
 function updateReadout(result: VisibilityResponse): void {
   if (!result.ephemeris.diagnostics.modelApplicable) {
+    readout.dataset.zone = "X";
+    showMessage(result.ephemeris.diagnostics.modelWarning ?? "Model not applicable for this date/location.", "warning");
     yallop.textContent = "Outside crescent window";
     yallop.title = result.ephemeris.diagnostics.modelWarning ?? "";
     odeh.textContent = result.ephemeris.diagnostics.modelWarning ?? "Model not applicable";
     odeh.title = odeh.textContent;
   } else {
+    readout.dataset.zone = result.criteria.yallop.zone;
+    hideMessage();
     yallop.textContent = `${result.criteria.yallop.zone} q ${result.criteria.yallop.q.toFixed(3)} - ${result.criteria.yallop.label}`;
     yallop.title = result.criteria.yallop.label;
     odeh.textContent = `${result.criteria.odeh.zone} V ${result.criteria.odeh.v.toFixed(2)} - ${result.criteria.odeh.label}`;
     odeh.title = result.criteria.odeh.label;
   }
-  bestTime.textContent = new Date(result.times.bestTimeUtc).toLocaleString();
+  bestTime.textContent = formatBestTime(result.times.bestTimeUtc);
   angles.textContent = `${result.ephemeris.arcvDeg.toFixed(2)} / ${result.ephemeris.dazDeg.toFixed(2)} deg`;
   width.textContent = `${result.ephemeris.crescentWidthArcMin.toFixed(3)} arcmin`;
+}
+
+function parseRequiredNumber(input: HTMLInputElement): number | null {
+  if (input.value.trim() === "") {
+    input.setCustomValidity(`${input.name || "value"} is required.`);
+    input.reportValidity();
+    input.setCustomValidity("");
+    return null;
+  }
+  const value = Number(input.value);
+  return Number.isFinite(value) ? value : null;
+}
+
+function showMessage(text: string, tone: "warning" | "error"): void {
+  message.hidden = false;
+  message.dataset.tone = tone;
+  message.textContent = text;
+}
+
+function hideMessage(): void {
+  message.hidden = true;
+  message.textContent = "";
+  delete message.dataset.tone;
+}
+
+function formatBestTime(isoUtc: string): string {
+  const date = new Date(isoUtc);
+  const local = date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short"
+  });
+  return `${local} (your timezone)`;
 }

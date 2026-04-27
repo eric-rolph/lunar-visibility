@@ -13,8 +13,21 @@
             <h1>Lunar Visibility</h1>
             <p>Yallop q + Odeh V</p>
           </div>
-          <output id="status" class="status">Ready</output>
+          <output id="status" class="status" role="status" aria-live="polite" aria-label="Application status">Ready</output>
         </div>
+
+        <p class="map-note">Map overlay uses sea-level calculations. The point result uses the entered elevation.</p>
+
+        <section class="readout" id="readout" aria-live="polite">
+          <div id="message" class="message" hidden></div>
+          <dl>
+            <div class="primary-result"><dt>Yallop</dt><dd id="yallop">-</dd></div>
+            <div class="primary-result"><dt>Odeh</dt><dd id="odeh">-</dd></div>
+            <div><dt>Best Time</dt><dd id="best-time">-</dd></div>
+            <div><dt>ARCV / DAZ</dt><dd id="angles">-</dd></div>
+            <div><dt>Width</dt><dd id="width">-</dd></div>
+          </dl>
+        </section>
 
         <form id="controls" class="controls">
           <label>
@@ -23,41 +36,35 @@
           </label>
           <label>
             Latitude
-            <input id="lat" name="lat" type="number" min="-89.9" max="89.9" step="0.0001" value="39.5807" />
+            <input id="lat" name="lat" type="number" min="-89.9" max="89.9" step="0.0001" value="39.5807" required />
           </label>
           <label>
             Longitude
-            <input id="lng" name="lng" type="number" min="-180" max="180" step="0.0001" value="-104.8772" />
+            <input id="lng" name="lng" type="number" min="-180" max="180" step="0.0001" value="-104.8772" required />
           </label>
           <label>
             Elevation m
-            <input id="elevation" name="elevation" type="number" min="-500" max="9000" step="1" value="1777" />
+            <input id="elevation" name="elevation" type="number" min="-500" max="9000" step="1" value="1777" required />
           </label>
           <div class="actions">
-            <button id="sample" type="submit">Point API</button>
-            <button id="center" type="button">Centennial</button>
+            <button id="sample" type="submit">Check Location</button>
+            <button id="center" type="button">Centennial, CO</button>
           </div>
         </form>
 
-        <section class="readout" id="readout" aria-live="polite">
-          <dl>
-            <div><dt>Yallop</dt><dd id="yallop">-</dd></div>
-            <div><dt>Odeh</dt><dd id="odeh">-</dd></div>
-            <div><dt>Best Time</dt><dd id="best-time">-</dd></div>
-            <div><dt>ARCV / DAZ</dt><dd id="angles">-</dd></div>
-            <div><dt>Width</dt><dd id="width">-</dd></div>
-          </dl>
+        <section class="legend" aria-label="Yallop zones">
+          <div data-zone="A"><span></span>A unaided</div>
+          <div data-zone="B"><span></span>B ideal</div>
+          <div data-zone="C"><span></span>C aid first</div>
+          <div data-zone="D"><span></span>D optical</div>
+          <div data-zone="E"><span></span>E telescope limit</div>
+          <div data-zone="F"><span></span>F invisible</div>
+          <div data-zone="X"><span></span>Out of range</div>
         </section>
 
-        <section class="legend" aria-label="Yallop zones">
-          <div><span style="--c: #1a9850"></span>A unaided</div>
-          <div><span style="--c: #91cf60"></span>B ideal</div>
-          <div><span style="--c: #fee08b"></span>C aid first</div>
-          <div><span style="--c: #fc8d59"></span>D optical</div>
-          <div><span style="--c: #d73027"></span>E telescope limit</div>
-          <div><span style="--c: #7f0000"></span>F invisible</div>
-          <div><span style="--c: #475569"></span>Out of range</div>
-        </section>
+        <p class="method-note">
+          Uses Yallop q and Odeh V first-crescent criteria. Visibility still depends on haze, horizon, eyesight, and observing skill.
+        </p>
       </aside>
 
       <main id="map" aria-label="Interactive lunar visibility map. Click the map or enter coordinates to sample a point."></main>

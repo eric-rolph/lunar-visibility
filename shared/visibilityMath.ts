@@ -16,34 +16,34 @@ const MS_PER_DAY = 86_400_000;
 
 export function classifyYallop(q: number): YallopCriterion {
   if (q > 0.216) {
-    return { q, zone: "A", label: "Easily visible to unaided eye", color: "#1a9850" };
+    return { q, zone: "A", label: "Easily visible to unaided eye", color: "#1b9e77" };
   }
   if (q > -0.014) {
-    return { q, zone: "B", label: "Visible under perfect conditions", color: "#91cf60" };
+    return { q, zone: "B", label: "Visible under perfect conditions", color: "#66bd63" };
   }
   if (q > -0.16) {
-    return { q, zone: "C", label: "Optical aid may be needed first", color: "#fee08b" };
+    return { q, zone: "C", label: "Optical aid may be needed first", color: "#f1d36b" };
   }
   if (q > -0.232) {
-    return { q, zone: "D", label: "Optical aid required", color: "#fc8d59" };
+    return { q, zone: "D", label: "Optical aid required", color: "#fdae61" };
   }
   if (q > -0.293) {
-    return { q, zone: "E", label: "Below normal telescope detection", color: "#d73027" };
+    return { q, zone: "E", label: "Below normal telescope detection", color: "#e34a33" };
   }
-  return { q, zone: "F", label: "Not visible, below Danjon limit", color: "#7f0000" };
+  return { q, zone: "F", label: "Not visible, below Danjon limit", color: "#8f0f17" };
 }
 
 export function classifyOdeh(v: number): OdehCriterion {
   if (v >= 5.65) {
-    return { v, zone: "A", label: "Visible by naked eye", color: "#1a9850" };
+    return { v, zone: "A", label: "Visible by naked eye", color: "#1b9e77" };
   }
   if (v >= 2) {
-    return { v, zone: "B", label: "Optical aid, possibly naked eye", color: "#91cf60" };
+    return { v, zone: "B", label: "Optical aid, possibly naked eye", color: "#66bd63" };
   }
   if (v >= -0.96) {
     return { v, zone: "C", label: "Visible by optical aid only", color: "#fdae61" };
   }
-  return { v, zone: "D", label: "Not visible even by optical aid", color: "#d73027" };
+  return { v, zone: "D", label: "Not visible even by optical aid", color: "#e34a33" };
 }
 
 export function yallopQ(arcvDeg: number, crescentWidthArcMin: number): number {

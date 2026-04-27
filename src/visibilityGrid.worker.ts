@@ -54,13 +54,17 @@ self.addEventListener("message", (event: MessageEvent<ComputeMessage>) => {
           elevationMeters: 0
         });
 
+        if (!result.ephemeris.diagnostics.modelApplicable) {
+          continue;
+        }
+
         cells.push({
           south: lat,
           north: lat + step,
           west: lng,
           east: lng + step,
-          color: result.ephemeris.diagnostics.modelApplicable ? result.criteria.yallop.color : "#475569",
-          zone: result.ephemeris.diagnostics.modelApplicable ? result.criteria.yallop.zone : "X",
+          color: result.criteria.yallop.color,
+          zone: result.criteria.yallop.zone,
           q: result.criteria.yallop.q,
           odehZone: result.criteria.odeh.zone
         });
