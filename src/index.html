@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lunar Crescent Visibility</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside class="panel">
+        <div class="brand">
+          <div>
+            <h1>Lunar Visibility</h1>
+            <p>Yallop q + Odeh V</p>
+          </div>
+          <output id="status" class="status">Ready</output>
+        </div>
+
+        <form id="controls" class="controls">
+          <label>
+            Date
+            <input id="date" name="date" type="date" required />
+          </label>
+          <label>
+            Latitude
+            <input id="lat" name="lat" type="number" min="-89.9" max="89.9" step="0.0001" value="39.5807" />
+          </label>
+          <label>
+            Longitude
+            <input id="lng" name="lng" type="number" min="-180" max="180" step="0.0001" value="-104.8772" />
+          </label>
+          <label>
+            Elevation m
+            <input id="elevation" name="elevation" type="number" min="-500" max="9000" step="1" value="1777" />
+          </label>
+          <div class="actions">
+            <button id="sample" type="submit">Point API</button>
+            <button id="center" type="button">Centennial</button>
+          </div>
+        </form>
+
+        <section class="readout" id="readout" aria-live="polite">
+          <dl>
+            <div><dt>Yallop</dt><dd id="yallop">-</dd></div>
+            <div><dt>Odeh</dt><dd id="odeh">-</dd></div>
+            <div><dt>Best Time</dt><dd id="best-time">-</dd></div>
+            <div><dt>ARCV / DAZ</dt><dd id="angles">-</dd></div>
+            <div><dt>Width</dt><dd id="width">-</dd></div>
+          </dl>
+        </section>
+
+        <section class="legend" aria-label="Yallop zones">
+          <div><span style="--c: #1a9850"></span>A unaided</div>
+          <div><span style="--c: #91cf60"></span>B ideal</div>
+          <div><span style="--c: #fee08b"></span>C aid first</div>
+          <div><span style="--c: #fc8d59"></span>D optical</div>
+          <div><span style="--c: #d73027"></span>E telescope limit</div>
+          <div><span style="--c: #7f0000"></span>F invisible</div>
+          <div><span style="--c: #475569"></span>Out of range</div>
+        </section>
+      </aside>
+
+      <main id="map" aria-label="Interactive lunar visibility map. Click the map or enter coordinates to sample a point."></main>
+    </div>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

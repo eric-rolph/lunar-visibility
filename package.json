@@ -1,0 +1,31 @@
+{
+  "name": "lunar-visibility",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Pages + Workers lunar crescent visibility map using Yallop and Odeh criteria.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:worker": "wrangler dev worker/src/index.ts --config worker/wrangler.toml --port 8787",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy:pages": "wrangler pages deploy dist --project-name lunar-visibility",
+    "deploy:worker": "wrangler deploy worker/src/index.ts --config worker/wrangler.toml"
+  },
+  "dependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.1.0",
+    "astronomy-engine": "^2.1.19",
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260425.0",
+    "@types/leaflet": "^1.9.20",
+    "eslint": "^9.39.1",
+    "playwright": "^1.59.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4",
+    "vitest": "^4.0.14",
+    "wrangler": "^4.85.0"
+  }
+}

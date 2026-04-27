@@ -1,0 +1,128 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lunar Crescent Visibility API",
+    "version": "0.1.0",
+    "description": "Point ephemeris API for Yallop/Odeh lunar crescent visibility maps."
+  },
+  "paths": {
+    "/api/visibility": {
+      "get": {
+        "summary": "Calculate point lunar visibility ephemeris",
+        "parameters": [
+          { "name": "date", "in": "query", "required": true, "schema": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" } },
+          { "name": "lat", "in": "query", "required": true, "schema": { "type": "number", "minimum": -89.9, "maximum": 89.9 } },
+          { "name": "lng", "in": "query", "required": true, "schema": { "type": "number", "minimum": -180, "maximum": 180 } },
+          { "name": "elevationMeters", "in": "query", "required": false, "schema": { "type": "number", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visibility ephemeris and Yallop/Odeh classifications",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VisibilityResponse" } } }
+          },
+          "400": { "description": "Invalid query parameters" },
+          "422": { "description": "Sunset or moonset not found for the coordinate/date" }
+        }
+      }
+    },
+    "/api/schema": {
+      "get": {
+        "summary": "Return the VisibilityResponse JSON schema",
+        "responses": {
+          "200": { "description": "JSON schema" }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "Return the OpenAPI document",
+        "responses": {
+          "200": { "description": "OpenAPI 3.1 document" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HorizontalBody": {
+        "type": "object",
+        "required": ["altitudeDeg", "azimuthDeg", "rightAscensionHours", "declinationDeg", "distanceAu"],
+        "properties": {
+          "altitudeDeg": { "type": "number" },
+          "azimuthDeg": { "type": "number" },
+          "rightAscensionHours": { "type": "number" },
+          "declinationDeg": { "type": "number" },
+          "distanceAu": { "type": "number" }
+        }
+      },
+      "VisibilityResponse": {
+        "type": "object",
+        "required": ["input", "times", "ephemeris", "criteria"],
+        "properties": {
+          "input": {
+            "type": "object",
+            "required": ["date", "lat", "lng", "elevationMeters"],
+            "properties": {
+              "date": { "type": "string" },
+              "lat": { "type": "number" },
+              "lng": { "type": "number" },
+              "elevationMeters": { "type": "number" }
+            }
+          },
+          "times": {
+            "type": "object",
+            "required": ["sunsetUtc", "moonsetUtc", "bestTimeUtc", "lagMinutes"],
+            "properties": {
+              "sunsetUtc": { "type": "string" },
+              "moonsetUtc": { "type": "string" },
+              "bestTimeUtc": { "type": "string" },
+              "lagMinutes": { "type": "number" }
+            }
+          },
+          "ephemeris": {
+            "type": "object",
+            "required": ["sun", "moon", "arcvDeg", "dazDeg", "arclDeg", "crescentWidthArcMin"],
+            "properties": {
+              "sun": { "$ref": "#/components/schemas/HorizontalBody" },
+              "moon": { "$ref": "#/components/schemas/HorizontalBody" },
+              "arcvDeg": { "type": "number" },
+              "dazDeg": { "type": "number" },
+              "arclDeg": { "type": "number" },
+              "crescentWidthArcMin": { "type": "number" },
+              "moonPhaseDeg": { "type": "number" },
+              "diagnostics": {
+                "type": "object",
+                "required": [
+                  "moonApparentAltitudeDeg",
+                  "sunApparentAltitudeDeg",
+                  "moonAirmass",
+                  "waxingEveningCrescent",
+                  "danjonLimited",
+                  "modelApplicable",
+                  "modelWarning"
+                ],
+                "properties": {
+                  "moonApparentAltitudeDeg": { "type": "number" },
+                  "sunApparentAltitudeDeg": { "type": "number" },
+                  "moonAirmass": { "type": ["number", "null"] },
+                  "waxingEveningCrescent": { "type": "boolean" },
+                  "danjonLimited": { "type": "boolean" },
+                  "modelApplicable": { "type": "boolean" },
+                  "modelWarning": { "type": ["string", "null"] }
+                }
+              }
+            }
+          },
+          "criteria": {
+            "type": "object",
+            "required": ["yallop", "odeh"],
+            "properties": {
+              "yallop": { "type": "object" },
+              "odeh": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

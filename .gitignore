@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.logs/
+.wrangler/
+tmp-browser-review/
+*.log
+.env
+.env.local
+.env.*.local
