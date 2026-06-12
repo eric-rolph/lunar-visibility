@@ -248,7 +248,12 @@ export function nextCrescentDate(from = new Date()): string {
   if (!newMoon) {
     return toIsoDate(new Date(from.getTime() + MS_PER_DAY));
   }
-  return toIsoDate(new Date(newMoon.date.getTime() + MS_PER_DAY));
+  // Pick the evening where first sightings realistically begin: a conjunction
+  // early in the UTC day makes that same UTC date the borderline evening, while
+  // a late conjunction pushes it to the next day. Always adding a day lands on
+  // an evening where the crescent is already easy across most longitudes.
+  const offsetDays = newMoon.date.getUTCHours() < 12 ? 0 : 1;
+  return toIsoDate(new Date(newMoon.date.getTime() + offsetDays * MS_PER_DAY));
 }
 
 function parseIsoDate(date: string): { year: number; month: number; day: number } {

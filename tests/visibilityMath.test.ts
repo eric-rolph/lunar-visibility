@@ -78,7 +78,10 @@ describe("point ephemeris", () => {
     expect(visibilityStateForErrorCode("SUNSET_NOT_FOUND").code).toBe("UNKNOWN");
   });
 
-  it("defaults to the evening after the next astronomical new moon", () => {
+  it("defaults to the first realistic sighting evening after the next new moon", () => {
+    // New moon 2026-05-16 20:01 UTC (late in the day) -> next evening.
     expect(nextCrescentDate(new Date("2026-04-27T00:00:00Z"))).toBe("2026-05-17");
+    // New moon 2026-06-15 02:54 UTC (early in the day) -> same evening.
+    expect(nextCrescentDate(new Date("2026-06-01T00:00:00Z"))).toBe("2026-06-15");
   });
 });

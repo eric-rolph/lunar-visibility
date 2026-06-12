@@ -149,34 +149,51 @@ function computeGrid(): void {
 
 function renderGrid(): void {
   const criterion = selectedCriterionKey();
+  const bounds = map.getBounds();
+  const offsets = worldCopyOffsets(bounds);
   const fragment = L.layerGroup();
 
   for (const cell of lastCells) {
     const presentation = presentCell(cell, criterion);
-    L.rectangle(
-      [
-        [cell.south, cell.west],
-        [cell.north, cell.east]
-      ],
-      {
-        renderer: cellRenderer,
-        stroke: false,
-        fill: true,
-        fillColor: presentation.color,
-        fillOpacity: presentation.isModelZone ? 0.32 : 0.28,
-        interactive: true
+    for (const offset of offsets) {
+      if (cell.east + offset < bounds.getWest() || cell.west + offset > bounds.getEast()) {
+        continue;
       }
-    )
-      .bindTooltip(presentation.tooltip, {
-        sticky: true,
-        opacity: 0.95
-      })
-      .addTo(fragment);
+      L.rectangle(
+        [
+          [cell.south, cell.west + offset],
+          [cell.north, cell.east + offset]
+        ],
+        {
+          renderer: cellRenderer,
+          stroke: false,
+          fill: true,
+          fillColor: presentation.color,
+          fillOpacity: presentation.isModelZone ? 0.32 : 0.28,
+          interactive: true
+        }
+      )
+        .bindTooltip(presentation.tooltip, {
+          sticky: true,
+          opacity: 0.95
+        })
+        .addTo(fragment);
+    }
   }
 
   fragment.addTo(map);
   renderLayer.removeFrom(map);
   renderLayer = fragment;
+}
+
+function worldCopyOffsets(bounds: L.LatLngBounds): number[] {
+  const offsets: number[] = [];
+  const kMin = Math.floor((bounds.getWest() + 180) / 360);
+  const kMax = Math.floor((bounds.getEast() + 180) / 360);
+  for (let k = kMin; k <= kMax; k += 1) {
+    offsets.push(k * 360);
+  }
+  return offsets;
 }
 
 async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true }): Promise<void> {
@@ -339,12 +356,15 @@ function exportCurrentMap(): void {
   drawGraticule(context, canvas.width, canvas.height);
 
   const criterion = selectedCriterionKey();
+  const exportOffsets = worldCopyOffsets(map.getBounds());
   for (const cell of lastCells) {
     const presentation = presentCell(cell, criterion);
-    const nw = map.latLngToContainerPoint([cell.north, cell.west]);
-    const se = map.latLngToContainerPoint([cell.south, cell.east]);
     context.fillStyle = withAlpha(presentation.color, presentation.isModelZone ? 0.7 : 0.58);
-    context.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
+    for (const offset of exportOffsets) {
+      const nw = map.latLngToContainerPoint([cell.north, cell.west + offset]);
+      const se = map.latLngToContainerPoint([cell.south, cell.east + offset]);
+      context.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
+    }
   }
 
   context.fillStyle = "rgba(11, 13, 16, 0.82)";

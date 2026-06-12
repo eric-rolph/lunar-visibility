@@ -33,3 +33,23 @@ export interface GridResultMessage {
   cells: GridCell[];
   truncated: boolean;
 }
+
+/**
+ * Normalize a raw Leaflet longitude range (which may extend beyond ±180 when
+ * the viewport shows wrapped world copies) into one or two segments inside
+ * [-180, 180] that cover the same real-world longitudes.
+ */
+export function longitudeSegments(west: number, east: number): Array<{ west: number; east: number }> {
+  if (east - west >= 360) {
+    return [{ west: -180, east: 180 }];
+  }
+  const wrappedWest = ((((west + 180) % 360) + 360) % 360) - 180;
+  const wrappedEast = wrappedWest + (east - west);
+  if (wrappedEast <= 180) {
+    return [{ west: wrappedWest, east: wrappedEast }];
+  }
+  return [
+    { west: wrappedWest, east: 180 },
+    { west: -180, east: wrappedEast - 360 }
+  ];
+}

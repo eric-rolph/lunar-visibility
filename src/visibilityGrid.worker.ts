@@ -1,4 +1,5 @@
 import { calculateVisibility, VisibilityError, visibilityStateForErrorCode } from "../shared/visibilityMath";
+import { longitudeSegments } from "./gridProtocol";
 import type { GridCell, GridComputeRequest, GridResultMessage } from "./gridProtocol";
 
 const MAX_CELLS = 6000;
@@ -29,34 +30,38 @@ async function computeGrid(request: GridComputeRequest): Promise<void> {
   const step = stepForZoom(request.zoom);
   const south = clamp(Math.floor(request.bounds.south / step) * step, -89, 89);
   const north = clamp(Math.ceil(request.bounds.north / step) * step, -89, 89);
-  const west = Math.max(-180, Math.floor(request.bounds.west / step) * step);
-  const east = Math.min(180, Math.ceil(request.bounds.east / step) * step);
+  const segments = longitudeSegments(request.bounds.west, request.bounds.east).map((segment) => ({
+    west: Math.max(-180, Math.floor(segment.west / step) * step),
+    east: Math.min(180, Math.ceil(segment.east / step) * step)
+  }));
 
   const cells: GridCell[] = [];
   let truncated = false;
   let lastYield = performance.now();
 
   outer: for (let lat = south; lat < north; lat += step) {
-    for (let lng = west; lng < east; lng += step) {
-      if (cells.length >= MAX_CELLS) {
-        truncated = true;
-        break outer;
-      }
-
-      cells.push({
-        south: lat,
-        north: lat + step,
-        west: lng,
-        east: lng + step,
-        ...cellResult(request.date, lat + step / 2, lng + step / 2)
-      });
-
-      if (performance.now() - lastYield > YIELD_INTERVAL_MS) {
-        await yieldToMessageQueue();
-        if (request.id !== activeRequestId) {
-          return;
+    for (const segment of segments) {
+      for (let lng = segment.west; lng < segment.east; lng += step) {
+        if (cells.length >= MAX_CELLS) {
+          truncated = true;
+          break outer;
         }
-        lastYield = performance.now();
+
+        cells.push({
+          south: lat,
+          north: lat + step,
+          west: lng,
+          east: lng + step,
+          ...cellResult(request.date, lat + step / 2, lng + step / 2)
+        });
+
+        if (performance.now() - lastYield > YIELD_INTERVAL_MS) {
+          await yieldToMessageQueue();
+          if (request.id !== activeRequestId) {
+            return;
+          }
+          lastYield = performance.now();
+        }
       }
     }
   }
