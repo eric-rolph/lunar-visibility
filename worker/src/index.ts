@@ -15,6 +15,22 @@ export default {
     }
 
     const url = new URL(request.url);
+    if (url.pathname === "/" || url.pathname === "/api" || url.pathname === "/api/") {
+      return Response.json(
+        {
+          service: "lunar-visibility-api",
+          description: "Point ephemeris API for first lunar crescent visibility using the Yallop q and Odeh V criteria.",
+          map: "https://lunar-visibility.pages.dev",
+          endpoints: {
+            visibility: "/api/visibility?date=2026-06-16&lat=39.5807&lng=-104.8772&elevationMeters=1777",
+            openapi: "/api/openapi.json",
+            schema: "/api/schema"
+          }
+        },
+        { headers: jsonHeaders }
+      );
+    }
+
     if (url.pathname === "/api/openapi.json") {
       return Response.json(schema, { headers: jsonHeaders });
     }

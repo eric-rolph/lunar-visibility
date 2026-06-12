@@ -55,6 +55,14 @@ describe("worker API", () => {
     expect(response.headers.get("access-control-allow-methods")).toContain("GET");
   });
 
+  it("serves a discovery index at the root", async () => {
+    const response = get("/");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.service).toBe("lunar-visibility-api");
+    expect(body.endpoints.visibility).toContain("/api/visibility");
+  });
+
   it("returns 404 for unknown routes", async () => {
     const response = get("/api/nope");
     expect(response.status).toBe(404);
