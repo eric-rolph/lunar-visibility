@@ -7,3 +7,4 @@ tmp-browser-review/
 .env
 .env.local
 .env.*.local
+.claude/

@@ -1,107 +1,102 @@
 import { calculateVisibility, VisibilityError, visibilityStateForErrorCode } from "../shared/visibilityMath";
-import type { OdehZoneCode, VisibilityStateCode, YallopZoneCode } from "../shared/types";
+import type { GridCell, GridComputeRequest, GridResultMessage } from "./gridProtocol";
 
-type Criterion = "yallop" | "odeh";
+const MAX_CELLS = 6000;
+const YIELD_INTERVAL_MS = 24;
+const MAX_CACHE_ENTRIES = 120_000;
 
-interface ComputeMessage {
-  type: "compute";
-  id: number;
-  date: string;
-  zoom: number;
-  criterion: Criterion;
-  bounds: {
-    south: number;
-    north: number;
-    west: number;
-    east: number;
-  };
-}
+type CellResult = Pick<GridCell, "state" | "q" | "v">;
 
-interface GridCell {
-  south: number;
-  north: number;
-  west: number;
-  east: number;
-  color: string;
-  label: string;
-  detail: string;
-  state: VisibilityStateCode;
-  criterion: Criterion;
-  zone?: YallopZoneCode | OdehZoneCode;
-  value?: number;
-  yallopZone?: YallopZoneCode;
-  odehZone?: OdehZoneCode;
-}
+let activeRequestId = 0;
+let cacheDate = "";
+const cellCache = new Map<string, CellResult>();
 
-self.addEventListener("message", (event: MessageEvent<ComputeMessage>) => {
-  const message = event.data;
-  if (message.type !== "compute") {
+self.addEventListener("message", (event: MessageEvent<GridComputeRequest>) => {
+  const request = event.data;
+  if (request.type !== "compute") {
     return;
   }
+  activeRequestId = request.id;
+  void computeGrid(request);
+});
 
-  const step = stepForZoom(message.zoom);
+async function computeGrid(request: GridComputeRequest): Promise<void> {
+  if (cacheDate !== request.date || cellCache.size > MAX_CACHE_ENTRIES) {
+    cellCache.clear();
+    cacheDate = request.date;
+  }
+
+  const step = stepForZoom(request.zoom);
+  const south = clamp(Math.floor(request.bounds.south / step) * step, -89, 89);
+  const north = clamp(Math.ceil(request.bounds.north / step) * step, -89, 89);
+  const west = Math.max(-180, Math.floor(request.bounds.west / step) * step);
+  const east = Math.min(180, Math.ceil(request.bounds.east / step) * step);
+
   const cells: GridCell[] = [];
-  const south = clamp(Math.floor(message.bounds.south / step) * step, -89, 89);
-  const north = clamp(Math.ceil(message.bounds.north / step) * step, -89, 89);
-  const west = Math.max(-180, Math.floor(message.bounds.west / step) * step);
-  const east = Math.min(180, Math.ceil(message.bounds.east / step) * step);
+  let truncated = false;
+  let lastYield = performance.now();
 
-  for (let lat = south; lat < north; lat += step) {
+  outer: for (let lat = south; lat < north; lat += step) {
     for (let lng = west; lng < east; lng += step) {
-      if (cells.length >= 6000) {
-        break;
+      if (cells.length >= MAX_CELLS) {
+        truncated = true;
+        break outer;
       }
 
-      const centerLat = lat + step / 2;
-      const centerLng = lng + step / 2;
+      cells.push({
+        south: lat,
+        north: lat + step,
+        west: lng,
+        east: lng + step,
+        ...cellResult(request.date, lat + step / 2, lng + step / 2)
+      });
 
-      try {
-        const result = calculateVisibility({
-          date: message.date,
-          lat: centerLat,
-          lng: centerLng,
-          elevationMeters: 0
-        });
-
-        const state = result.ephemeris.diagnostics.state;
-        const criterion = message.criterion === "odeh" ? result.criteria.odeh : result.criteria.yallop;
-
-        cells.push({
-          south: lat,
-          north: lat + step,
-          west: lng,
-          east: lng + step,
-          color: result.ephemeris.diagnostics.modelApplicable ? criterion.color : state.color,
-          label: result.ephemeris.diagnostics.modelApplicable ? criterion.label : state.label,
-          detail: result.ephemeris.diagnostics.modelApplicable ? `${message.criterion.toUpperCase()} zone ${criterion.zone}` : state.detail,
-          state: state.code,
-          criterion: message.criterion,
-          zone: result.ephemeris.diagnostics.modelApplicable ? criterion.zone : undefined,
-          value: "q" in criterion ? criterion.q : criterion.v,
-          yallopZone: result.criteria.yallop.zone,
-          odehZone: result.criteria.odeh.zone
-        });
-      } catch (error) {
-        if (error instanceof VisibilityError) {
-          const state = visibilityStateForErrorCode(error.code);
-          cells.push({
-            south: lat,
-            north: lat + step,
-            west: lng,
-            east: lng + step,
-            color: state.color,
-            label: state.label,
-            detail: state.detail,
-            state: state.code,
-            criterion: message.criterion
-          });
+      if (performance.now() - lastYield > YIELD_INTERVAL_MS) {
+        await yieldToMessageQueue();
+        if (request.id !== activeRequestId) {
+          return;
         }
+        lastYield = performance.now();
       }
     }
   }
 
-  self.postMessage({ type: "grid", id: message.id, cells });
-});
+  if (request.id !== activeRequestId) {
+    return;
+  }
+
+  const result: GridResultMessage = { type: "grid", id: request.id, cells, truncated };
+  self.postMessage(result);
+}
+
+function cellResult(date: string, lat: number, lng: number): CellResult {
+  const key = `${lat}|${lng}`;
+  const cached = cellCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  let result: CellResult;
+  try {
+    const visibility = calculateVisibility({ date, lat, lng, elevationMeters: 0 });
+    result = {
+      state: visibility.ephemeris.diagnostics.state.code,
+      q: visibility.criteria.yallop.q,
+      v: visibility.criteria.odeh.v
+    };
+  } catch (error) {
+    result = {
+      state: error instanceof VisibilityError ? visibilityStateForErrorCode(error.code).code : "UNKNOWN"
+    };
+  }
+
+  cellCache.set(key, result);
+  return result;
+}
+
+function yieldToMessageQueue(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function stepForZoom(zoom: number): number {
   if (zoom <= 2) return 6;

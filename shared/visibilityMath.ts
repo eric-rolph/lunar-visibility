@@ -78,6 +78,10 @@ export function classifyOdeh(v: number): OdehCriterion {
   return { v, zone: "D", label: "Not visible even by optical aid", color: "#e34a33" };
 }
 
+export function visibilityStateForCode(code: VisibilityStateCode): VisibilityState {
+  return VISIBILITY_STATES[code];
+}
+
 export function visibilityStateForErrorCode(code: string): VisibilityState {
   if (code === "MOON_BELOW_HORIZON_AT_SUNSET" || code === "MOONSET_BEFORE_SUNSET") {
     return VISIBILITY_STATES.IMPOSSIBLE;

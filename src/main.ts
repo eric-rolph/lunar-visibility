@@ -2,27 +2,19 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./styles.css";
 import type { VisibilityResponse } from "../shared/types";
-import { nextCrescentDate } from "../shared/visibilityMath";
+import { classifyOdeh, classifyYallop, nextCrescentDate, visibilityStateForCode } from "../shared/visibilityMath";
+import type { GridCell, GridResultMessage } from "./gridProtocol";
 import markerIcon2xUrl from "leaflet/dist/images/marker-icon-2x.png";
 import markerIconUrl from "leaflet/dist/images/marker-icon.png";
 import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
 
 type Criterion = "yallop" | "odeh";
-type GridCell = {
-  south: number;
-  west: number;
-  north: number;
-  east: number;
+
+interface CellPresentation {
   color: string;
-  label: string;
-  detail: string;
-  state: string;
-  criterion: Criterion;
-  zone?: string;
-  value?: number;
-  yallopZone?: string;
-  odehZone?: string;
-};
+  tooltip: string;
+  isModelZone: boolean;
+}
 
 const CENTENNIAL = { lat: 39.5807, lng: -104.8772, elevationMeters: 1777 };
 const API_BASE_URL =
@@ -74,10 +66,23 @@ dateInput.value = nextCrescentDate();
 let requestId = 0;
 let renderLayer = L.layerGroup().addTo(map);
 let marker = L.marker([CENTENNIAL.lat, CENTENNIAL.lng], { icon: markerIcon }).addTo(map);
-let gridWorker: Worker | null = null;
 let gridTimer: number | undefined;
 let lastCells: GridCell[] = [];
 let currentPoint: VisibilityResponse | null = null;
+let pointAbort: AbortController | null = null;
+
+const cellRenderer = L.canvas({ padding: 0.2 });
+const gridWorker = new Worker(new URL("./visibilityGrid.worker.ts", import.meta.url), { type: "module" });
+gridWorker.addEventListener("message", (event: MessageEvent<GridResultMessage>) => {
+  const result = event.data;
+  if (result.type !== "grid" || result.id !== requestId) {
+    return;
+  }
+  lastCells = result.cells;
+  renderGrid();
+  status.value = result.truncated ? "Map updated (partial)" : "Map updated";
+  status.title = `${result.cells.length} visibility cells rendered${result.truncated ? "; cell limit reached, zoom in for full coverage" : ""}`;
+});
 
 map.on("moveend zoomend", scheduleGrid);
 dateInput.addEventListener("change", () => {
@@ -86,7 +91,7 @@ dateInput.addEventListener("change", () => {
 });
 criterionInput.addEventListener("change", () => {
   updateLegend();
-  scheduleGrid();
+  renderGrid();
   if (currentPoint) {
     updateReadout(currentPoint);
   }
@@ -128,24 +133,11 @@ function computeGrid(): void {
   const bounds = map.getBounds();
   status.value = "Updating map";
 
-  gridWorker?.terminate();
-  gridWorker = new Worker(new URL("./visibilityGrid.worker.ts", import.meta.url), { type: "module" });
-  gridWorker.addEventListener("message", (event) => {
-    const message = event.data;
-    if (message.type !== "grid" || message.id !== requestId) {
-      return;
-    }
-    renderGrid(message.cells);
-    status.value = "Map updated";
-    status.title = `${message.cells.length} visibility cells rendered`;
-  });
-
   gridWorker.postMessage({
     type: "compute",
     id: requestId,
     date: dateInput.value,
     zoom: map.getZoom(),
-    criterion: selectedCriterionKey(),
     bounds: {
       south: bounds.getSouth(),
       north: bounds.getNorth(),
@@ -155,36 +147,36 @@ function computeGrid(): void {
   });
 }
 
-function renderGrid(cells: GridCell[]): void {
-  lastCells = cells;
-  renderLayer.clearLayers();
-  const canvasRenderer = L.canvas({ padding: 0.2 });
+function renderGrid(): void {
+  const criterion = selectedCriterionKey();
   const fragment = L.layerGroup();
 
-  for (const cell of cells) {
+  for (const cell of lastCells) {
+    const presentation = presentCell(cell, criterion);
     L.rectangle(
       [
         [cell.south, cell.west],
         [cell.north, cell.east]
       ],
       {
-        renderer: canvasRenderer,
+        renderer: cellRenderer,
         stroke: false,
         fill: true,
-        fillColor: cell.color,
-        fillOpacity: cell.state === "VISIBLE_MODEL" ? 0.32 : 0.28,
+        fillColor: presentation.color,
+        fillOpacity: presentation.isModelZone ? 0.32 : 0.28,
         interactive: true
       }
     )
-      .bindTooltip(formatCellTooltip(cell), {
+      .bindTooltip(presentation.tooltip, {
         sticky: true,
         opacity: 0.95
       })
       .addTo(fragment);
   }
 
+  fragment.addTo(map);
   renderLayer.removeFrom(map);
-  renderLayer = fragment.addTo(map);
+  renderLayer = fragment;
 }
 
 async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true }): Promise<void> {
@@ -213,8 +205,11 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
   url.searchParams.set("lng", String(lng));
   url.searchParams.set("elevationMeters", String(elevation));
 
+  pointAbort?.abort();
+  pointAbort = new AbortController();
+
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: pointAbort.signal });
     const body = await response.json();
     if (!response.ok) {
       throw new Error(body.message ?? body.error ?? "Point API failed");
@@ -224,6 +219,9 @@ async function samplePoint(options: { syncMarker: boolean } = { syncMarker: true
     updateReadout(currentPoint);
     status.value = "Ready";
   } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
     const message = error instanceof Error ? error.message : "Unable to sample point";
     readout.dataset.zone = "X";
     showMessage(message, "error");
@@ -249,7 +247,7 @@ function updateReadout(result: VisibilityResponse): void {
     yallop.textContent = "Not scored";
     yallop.title = result.ephemeris.diagnostics.modelWarning ?? "";
     odeh.textContent = "Not scored";
-    odeh.title = odeh.textContent;
+    odeh.title = result.ephemeris.diagnostics.modelWarning ?? "";
   } else {
     const selectedResult = selected === "odeh" ? result.criteria.odeh : result.criteria.yallop;
     readout.dataset.zone = selectedResult.zone;
@@ -278,14 +276,25 @@ function formatCriterionResult(criterion: Criterion, result: VisibilityResponse)
   return `Yallop ${result.criteria.yallop.zone}: ${result.criteria.yallop.label} (q ${result.criteria.yallop.q.toFixed(3)})`;
 }
 
-function formatCellTooltip(cell: GridCell): string {
-  if (cell.state !== "VISIBLE_MODEL") {
-    return `${cell.label}: ${cell.detail}`;
+function presentCell(cell: GridCell, criterion: Criterion): CellPresentation {
+  if (cell.state !== "VISIBLE_MODEL" || cell.q === undefined || cell.v === undefined) {
+    const state = visibilityStateForCode(cell.state);
+    return {
+      color: state.color,
+      tooltip: `${state.label}: ${state.detail}`,
+      isModelZone: false
+    };
   }
 
-  const valueLabel = cell.criterion === "odeh" ? "V" : "q";
-  const value = typeof cell.value === "number" ? ` | ${valueLabel} ${cell.value.toFixed(cell.criterion === "odeh" ? 2 : 3)}` : "";
-  return `${cell.label} | ${cell.criterion.toUpperCase()} ${cell.zone}${value} | Yallop ${cell.yallopZone ?? "-"} | Odeh ${cell.odehZone ?? "-"}`;
+  const yallop = classifyYallop(cell.q);
+  const odeh = classifyOdeh(cell.v);
+  const selected = criterion === "odeh" ? odeh : yallop;
+  const value = criterion === "odeh" ? `V ${odeh.v.toFixed(2)}` : `q ${yallop.q.toFixed(3)}`;
+  return {
+    color: selected.color,
+    tooltip: `${selected.label} | ${criterion.toUpperCase()} ${selected.zone} | ${value} | Yallop ${yallop.zone} | Odeh ${odeh.zone}`,
+    isModelZone: true
+  };
 }
 
 function updateLegend(): void {
@@ -329,10 +338,12 @@ function exportCurrentMap(): void {
   context.fillRect(0, 0, canvas.width, canvas.height);
   drawGraticule(context, canvas.width, canvas.height);
 
+  const criterion = selectedCriterionKey();
   for (const cell of lastCells) {
+    const presentation = presentCell(cell, criterion);
     const nw = map.latLngToContainerPoint([cell.north, cell.west]);
     const se = map.latLngToContainerPoint([cell.south, cell.east]);
-    context.fillStyle = withAlpha(cell.color, cell.state === "VISIBLE_MODEL" ? 0.7 : 0.58);
+    context.fillStyle = withAlpha(presentation.color, presentation.isModelZone ? 0.7 : 0.58);
     context.fillRect(nw.x, nw.y, se.x - nw.x, se.y - nw.y);
   }
 
