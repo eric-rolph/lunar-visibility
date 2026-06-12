@@ -9,10 +9,37 @@ import {
   SearchMoonPhase,
   SearchRiseSet
 } from "astronomy-engine";
-import type { HorizontalBody, OdehCriterion, VisibilityResponse, VisibilityState, VisibilityStateCode, YallopCriterion } from "./types";
+import type {
+  HorizontalBody,
+  OdehCriterion,
+  OdehZoneCode,
+  VisibilityResponse,
+  VisibilityState,
+  VisibilityStateCode,
+  YallopCriterion,
+  YallopZoneCode
+} from "./types";
 
 const MOON_RADIUS_KM = 1737.4;
 const MS_PER_DAY = 86_400_000;
+
+// Single source of truth for map/legend/readout colors, tuned for a dark basemap.
+export const YALLOP_ZONE_COLORS: Record<YallopZoneCode, string> = {
+  A: "#2dd4a4",
+  B: "#a3e635",
+  C: "#fbbf24",
+  D: "#fb923c",
+  E: "#f87171",
+  F: "#dc2626"
+};
+
+export const ODEH_ZONE_COLORS: Record<OdehZoneCode, string> = {
+  A: "#2dd4a4",
+  B: "#a3e635",
+  C: "#fb923c",
+  D: "#dc2626"
+};
+
 const VISIBILITY_STATES: Record<VisibilityStateCode, VisibilityState> = {
   VISIBLE_MODEL: {
     code: "VISIBLE_MODEL",
@@ -22,60 +49,60 @@ const VISIBILITY_STATES: Record<VisibilityStateCode, VisibilityState> = {
   },
   IMPOSSIBLE: {
     code: "IMPOSSIBLE",
-    label: "Impossible",
-    color: "#3f1720",
-    detail: "The Moon is below the horizon at sunset, or sets before/at sunset."
+    label: "No evening window",
+    color: "#7c3aed",
+    detail: "The Moon is below the horizon at sunset or sets before the Sun, so there is no crescent window this evening."
   },
   NOT_POSSIBLE: {
     code: "NOT_POSSIBLE",
-    label: "Not possible",
-    color: "#8f0f17",
+    label: "Below visibility limit",
+    color: "#881337",
     detail: "The geometry is below a physical first-crescent visibility limit."
   },
   OUT_OF_MODEL: {
     code: "OUT_OF_MODEL",
     label: "Out of model range",
-    color: "#64748b",
+    color: "#475569",
     detail: "The date/location is outside the early waxing crescent range these criteria are intended for."
   },
   UNKNOWN: {
     code: "UNKNOWN",
     label: "Unknown",
-    color: "#4b5563",
+    color: "#52525b",
     detail: "A high-latitude or horizon edge case prevented a reliable sunset/moonset calculation."
   }
 };
 
 export function classifyYallop(q: number): YallopCriterion {
   if (q > 0.216) {
-    return { q, zone: "A", label: "Easily visible unaided", color: "#1b9e77" };
+    return { q, zone: "A", label: "Easily visible unaided", color: YALLOP_ZONE_COLORS.A };
   }
   if (q > -0.014) {
-    return { q, zone: "B", label: "Visible under perfect conditions", color: "#66bd63" };
+    return { q, zone: "B", label: "Visible under perfect conditions", color: YALLOP_ZONE_COLORS.B };
   }
   if (q > -0.16) {
-    return { q, zone: "C", label: "Optical aid may be needed first", color: "#f1d36b" };
+    return { q, zone: "C", label: "Optical aid may be needed first", color: YALLOP_ZONE_COLORS.C };
   }
   if (q > -0.232) {
-    return { q, zone: "D", label: "Optical aid required", color: "#fdae61" };
+    return { q, zone: "D", label: "Optical aid required", color: YALLOP_ZONE_COLORS.D };
   }
   if (q > -0.293) {
-    return { q, zone: "E", label: "Below normal telescope detection", color: "#e34a33" };
+    return { q, zone: "E", label: "Below normal telescope detection", color: YALLOP_ZONE_COLORS.E };
   }
-  return { q, zone: "F", label: "Not visible, below Danjon limit", color: "#8f0f17" };
+  return { q, zone: "F", label: "Not visible, below Danjon limit", color: YALLOP_ZONE_COLORS.F };
 }
 
 export function classifyOdeh(v: number): OdehCriterion {
   if (v >= 5.65) {
-    return { v, zone: "A", label: "Visible unaided", color: "#1b9e77" };
+    return { v, zone: "A", label: "Visible unaided", color: ODEH_ZONE_COLORS.A };
   }
   if (v >= 2) {
-    return { v, zone: "B", label: "May be visible unaided, optical aid helps", color: "#66bd63" };
+    return { v, zone: "B", label: "May be visible unaided, optical aid helps", color: ODEH_ZONE_COLORS.B };
   }
   if (v >= -0.96) {
-    return { v, zone: "C", label: "Visible by optical aid only", color: "#fdae61" };
+    return { v, zone: "C", label: "Visible by optical aid only", color: ODEH_ZONE_COLORS.C };
   }
-  return { v, zone: "D", label: "Not visible even by optical aid", color: "#e34a33" };
+  return { v, zone: "D", label: "Not visible even by optical aid", color: ODEH_ZONE_COLORS.D };
 }
 
 export function visibilityStateForCode(code: VisibilityStateCode): VisibilityState {

@@ -3,50 +3,73 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Global first-crescent visibility map using the Yallop q and Odeh V criteria." />
+    <meta name="theme-color" content="#0b0d10" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M21 3a13 13 0 1 0 0 26 14.5 14.5 0 0 1 0-26Z' fill='%23fbd38d'/%3E%3C/svg%3E" />
     <title>Lunar Crescent Visibility</title>
   </head>
   <body>
     <div id="app">
       <aside class="panel">
         <div class="brand">
-          <div>
-            <h1>Lunar Visibility</h1>
-            <p>Yallop q + Odeh V</p>
+          <div class="brand-title">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M21 3a13 13 0 1 0 0 26 14.5 14.5 0 0 1 0-26Z" fill="#fbd38d" />
+            </svg>
+            <div>
+              <h1>Lunar Visibility</h1>
+              <p>First-crescent forecast · Yallop q + Odeh V</p>
+            </div>
           </div>
           <output id="status" class="status" role="status" aria-live="polite" aria-label="Application status">Ready</output>
         </div>
 
-        <p class="map-note">Map overlay uses sea-level calculations. The point result uses the entered elevation.</p>
-
-        <div class="toolbar" aria-label="Map tools">
-          <label>
-            Criterion
-            <select id="criterion" name="criterion">
-              <option value="yallop">Yallop</option>
-              <option value="odeh">Odeh</option>
-              <option value="saao" disabled>SAAO later</option>
-            </select>
-          </label>
-          <button id="export-png" type="button">Export PNG</button>
-        </div>
-
         <section class="readout" id="readout" aria-live="polite">
           <div id="message" class="message" hidden></div>
-          <dl>
-            <div class="primary-result"><dt>Selected</dt><dd id="selected-criterion">-</dd></div>
-            <div class="primary-result"><dt>Yallop</dt><dd id="yallop">-</dd></div>
-            <div class="primary-result"><dt>Odeh</dt><dd id="odeh">-</dd></div>
-            <div><dt>Best Time</dt><dd id="best-time">-</dd></div>
-            <div><dt>ARCV / DAZ</dt><dd id="angles">-</dd></div>
-            <div><dt>Width</dt><dd id="width">-</dd></div>
+          <div class="verdict">
+            <span class="zone-badge" id="zone-badge" aria-hidden="true">–</span>
+            <div class="verdict-text">
+              <strong id="verdict-label">Checking…</strong>
+              <span id="verdict-meta">–</span>
+            </div>
+          </div>
+          <dl class="details">
+            <div><dt>Also</dt><dd id="other-criterion">–</dd></div>
+            <div>
+              <dt><abbr title="Yallop's optimum observation moment: sunset plus 4/9 of the sunset-to-moonset lag.">Best time</abbr></dt>
+              <dd id="best-time">–</dd>
+            </div>
+            <div>
+              <dt><abbr title="Approximate time since astronomical new moon at the best time.">Moon age</abbr></dt>
+              <dd id="moon-age">–</dd>
+            </div>
+            <div>
+              <dt><abbr title="Minutes between sunset and moonset — the window for spotting the crescent.">Window</abbr></dt>
+              <dd id="lag">–</dd>
+            </div>
+            <div>
+              <dt><abbr title="ARCV: Moon minus Sun altitude at best time. DAZ: Sun minus Moon azimuth. Both in degrees, airless and topocentric.">ARCV / DAZ</abbr></dt>
+              <dd id="angles">–</dd>
+            </div>
+            <div>
+              <dt><abbr title="Topocentric crescent width in arc minutes — the input to both criteria.">Width</abbr></dt>
+              <dd id="width">–</dd>
+            </div>
           </dl>
         </section>
 
         <form id="controls" class="controls">
-          <label>
-            Date
-            <input id="date" name="date" type="date" required />
-          </label>
+          <div class="date-row">
+            <label class="date-label">
+              Evening of
+              <div class="date-stepper">
+                <button id="date-prev" type="button" class="btn-step" aria-label="Previous day">◀</button>
+                <input id="date" name="date" type="date" required />
+                <button id="date-next" type="button" class="btn-step" aria-label="Next day">▶</button>
+              </div>
+            </label>
+            <button id="next-new-moon" type="button" class="btn-secondary btn-moon" title="Jump to the first sighting evening of the next lunar month">Next new moon</button>
+          </div>
           <label>
             Latitude
             <input id="lat" name="lat" type="number" min="-89.9" max="89.9" step="0.0001" value="39.5807" required />
@@ -59,30 +82,38 @@
             Elevation m
             <input id="elevation" name="elevation" type="number" min="-500" max="9000" step="1" value="1777" required />
           </label>
+          <p class="hint">Or click anywhere on the map to check that spot.</p>
           <div class="actions">
-            <button id="sample" type="submit">Check Location</button>
-            <button id="center" type="button">Centennial, CO</button>
+            <button id="sample" type="submit" class="btn-primary">Check Location</button>
+            <button id="locate" type="button" class="btn-secondary">My location</button>
+            <button id="center" type="button" class="btn-secondary">Centennial, CO</button>
           </div>
         </form>
 
         <section class="legend" aria-label="Visibility legend">
-          <div data-zone="A"><span></span><b>A</b> Easily visible unaided</div>
-          <div data-zone="B"><span></span><b>B</b> Perfect conditions</div>
-          <div data-zone="C"><span></span><b>C</b> May need optical aid first</div>
-          <div data-zone="D"><span></span><b>D</b> Optical aid only</div>
-          <div data-zone="E"><span></span><b>E</b> Telescope-limit / very unlikely</div>
-          <div data-zone="F"><span></span><b>F</b> Not visible</div>
-          <div data-state="IMPOSSIBLE"><span></span>Impossible</div>
-          <div data-state="NOT_POSSIBLE"><span></span>Not possible</div>
-          <div data-state="OUT_OF_MODEL"><span></span>Out of model range</div>
-          <div data-state="UNKNOWN"><span></span>Unknown</div>
+          <div class="legend-head">
+            <span id="legend-title">Yallop zones</span>
+            <button id="export-png" type="button" class="btn-ghost">Export PNG</button>
+          </div>
+          <div class="legend-bar" id="legend-bar"></div>
+          <div class="legend-zones" id="legend-zones"></div>
+          <div class="legend-states" id="legend-states"></div>
+          <p class="map-note">Map overlay uses sea-level geometry at each cell's best time. The point result uses your entered elevation.</p>
         </section>
+
+        <label class="criterion-row">
+          Criterion
+          <select id="criterion" name="criterion">
+            <option value="yallop">Yallop q (zones A–F)</option>
+            <option value="odeh">Odeh V (zones A–D)</option>
+          </select>
+        </label>
 
         <details class="method-drawer">
           <summary>Method and observing caveats</summary>
           <p>
-            Uses Yallop q and Odeh V first-crescent criteria. Visibility still depends on haze, horizon transparency,
-            eyesight, observer experience, and knowing exactly where to look.
+            Uses Yallop q and Odeh V first-crescent criteria at the Yallop best time. Real sightings still depend on haze,
+            horizon transparency, eyesight, observer experience, and knowing exactly where to look.
           </p>
           <p>
             References:
