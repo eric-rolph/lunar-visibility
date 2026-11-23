@@ -14,18 +14,21 @@
     "deploy:worker": "wrangler deploy worker/src/index.ts --config worker/wrangler.toml"
   },
   "dependencies": {
-    "@vitejs/plugin-basic-ssl": "^2.1.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "astronomy-engine": "^2.1.19",
     "leaflet": "^1.9.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260425.0",
+    "@cloudflare/workers-types": "^5.20261119.1",
     "@types/leaflet": "^1.9.20",
     "eslint": "^9.39.1",
     "playwright": "^1.59.1",
     "typescript": "^5.9.3",
-    "vite": "^7.2.4",
-    "vitest": "^4.0.14",
-    "wrangler": "^4.85.0"
+    "vite": "^8.3.5",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.166.0"
+  },
+  "overrides": {
+    "undici": ">=7.24.0"
   }
 }
